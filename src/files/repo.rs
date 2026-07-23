@@ -4,13 +4,14 @@ use uuid::Uuid;
 use crate::{
     DbPool,
     db::run_db,
+    errors::repo_error::RepoError,
     files::{
         model::{File, FileShare, NewFile, NewFileShare},
         schema::{file_shares, files},
     },
 };
 
-pub async fn insert_file(pool: DbPool, new_file: NewFile) -> Result<(), String> {
+pub async fn insert_file(pool: DbPool, new_file: NewFile) -> Result<(), RepoError> {
     run_db(pool, move |conn| {
         diesel::insert_into(files::table)
             .values(&new_file)
@@ -20,7 +21,7 @@ pub async fn insert_file(pool: DbPool, new_file: NewFile) -> Result<(), String> 
     .await
 }
 
-pub async fn find_file_by_id(pool: DbPool, id: i32) -> Result<File, String> {
+pub async fn find_file_by_id(pool: DbPool, id: i32) -> Result<File, RepoError> {
     run_db(pool, move |conn| {
         files::table
             .find(id)
@@ -30,7 +31,7 @@ pub async fn find_file_by_id(pool: DbPool, id: i32) -> Result<File, String> {
     .await
 }
 
-pub async fn insert_share_link(pool: DbPool, new_share: NewFileShare) -> Result<FileShare, String> {
+pub async fn insert_share_link(pool: DbPool, new_share: NewFileShare) -> Result<FileShare, RepoError> {
     run_db(pool, move |conn| {
         diesel::insert_into(file_shares::table)
             .values(&new_share)
@@ -40,7 +41,7 @@ pub async fn insert_share_link(pool: DbPool, new_share: NewFileShare) -> Result<
     .await
 }
 
-pub async fn find_share_by_token(pool: DbPool, token: Uuid) -> Result<FileShare, String> {
+pub async fn find_share_by_token(pool: DbPool, token: Uuid) -> Result<FileShare, RepoError> {
     run_db(pool, move |conn| {
         file_shares::table
             .filter(file_shares::token.eq(token))

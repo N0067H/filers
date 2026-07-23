@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    error::{AppError, internal_error},
+    errors::app_error::AppError,
     files::{model, service},
 };
 
@@ -22,9 +22,13 @@ pub async fn upload_file(
 ) -> Result<StatusCode, AppError> {
     fs::create_dir_all(&state.upload_dir)
         .await
-        .map_err(internal_error)?;
+        .map_err(AppError::internal)?;
 
-    while let Some(mut field) = multipart.next_field().await.map_err(internal_error)? {
+    while let Some(mut field) = multipart
+        .next_field()
+        .await
+        .map_err(AppError::internal)?
+    {
         let filename = field
             .file_name()
             .map(|s| s.to_string())
@@ -37,17 +41,25 @@ pub async fn upload_file(
 
         let stored_filename = Uuid::new_v4().to_string();
         let path = state.upload_dir.join(&stored_filename);
-        let mut file = File::create(&path).await.map_err(internal_error)?;
+        let mut file = File::create(&path)
+            .await
+            .map_err(AppError::internal)?;
         let mut size = 0usize;
 
-        while let Some(chunk) = field.chunk().await.map_err(internal_error)? {
+        while let Some(chunk) = field
+            .chunk()
+            .await
+            .map_err(AppError::internal)?
+        {
             size += chunk.len();
 
             if size > state.max_upload_size {
-                return Err((StatusCode::PAYLOAD_TOO_LARGE, "File too large".to_string()));
+                return Err(AppError::PayloadTooLarge("File too large"));
             }
 
-            file.write_all(&chunk).await.map_err(internal_error)?;
+            file.write_all(&chunk)
+                .await
+                .map_err(AppError::internal)?;
         }
 
         service::save_upload(

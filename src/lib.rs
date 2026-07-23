@@ -1,6 +1,6 @@
 pub mod app;
 pub mod db;
-pub mod error;
+pub mod errors;
 pub mod files;
 
 use diesel::{
