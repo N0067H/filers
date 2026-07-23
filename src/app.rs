@@ -6,12 +6,14 @@ use crate::{DbPool, files};
 pub struct AppState {
     pub pool: DbPool,
     pub upload_dir: std::path::PathBuf,
+    pub max_upload_size: usize,
 }
 
-pub fn build_state(pool: DbPool, upload_dir: String) -> AppState {
+pub fn build_state(pool: DbPool, upload_dir: String, max_upload_size: usize) -> AppState {
     AppState {
         pool,
         upload_dir: upload_dir.into(),
+        max_upload_size,
     }
 }
 

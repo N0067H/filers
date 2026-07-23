@@ -4,6 +4,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use tokio::{
+    fs::{self, File},
+    io::AsyncWriteExt,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -16,7 +20,11 @@ pub async fn upload_file(
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<StatusCode, AppError> {
-    while let Some(field) = multipart.next_field().await.map_err(internal_error)? {
+    fs::create_dir_all(&state.upload_dir)
+        .await
+        .map_err(internal_error)?;
+
+    while let Some(mut field) = multipart.next_field().await.map_err(internal_error)? {
         let filename = field
             .file_name()
             .map(|s| s.to_string())
@@ -27,8 +35,29 @@ pub async fn upload_file(
             .map(|s| s.to_string())
             .unwrap_or_else(|| filename.clone());
 
-        let data = field.bytes().await.map_err(internal_error)?.to_vec();
-        service::save_upload(&state, filename, display_name, data).await?;
+        let stored_filename = Uuid::new_v4().to_string();
+        let path = state.upload_dir.join(&stored_filename);
+        let mut file = File::create(&path).await.map_err(internal_error)?;
+        let mut size = 0usize;
+
+        while let Some(chunk) = field.chunk().await.map_err(internal_error)? {
+            size += chunk.len();
+
+            if size > state.max_upload_size {
+                return Err((StatusCode::PAYLOAD_TOO_LARGE, "File too large".to_string()));
+            }
+
+            file.write_all(&chunk).await.map_err(internal_error)?;
+        }
+
+        service::save_upload(
+            &state,
+            filename,
+            display_name,
+            path.to_string_lossy().to_string(),
+            size as i64,
+        )
+        .await?;
     }
 
     Ok(StatusCode::CREATED)

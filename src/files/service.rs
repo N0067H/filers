@@ -2,10 +2,7 @@ use axum::http::{
     HeaderMap, HeaderValue, StatusCode,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
-use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-};
+use tokio::fs;
 use uuid::Uuid;
 
 use crate::{
@@ -21,26 +18,14 @@ pub async fn save_upload(
     state: &AppState,
     filename: String,
     display_name: String,
-    data: Vec<u8>,
+    path: String,
+    size: i64,
 ) -> Result<(), AppError> {
-    fs::create_dir_all(&state.upload_dir)
-        .await
-        .map_err(crate::error::internal_error)?;
-
-    let path = state.upload_dir.join(&filename);
-    let mut file = File::create(&path)
-        .await
-        .map_err(crate::error::internal_error)?;
-
-    file.write_all(&data)
-        .await
-        .map_err(crate::error::internal_error)?;
-
     let new_file = NewFile {
         name: filename,
         display_name,
-        path: path.to_string_lossy().to_string(),
-        size: data.len() as i64,
+        path,
+        size,
     };
 
     repo::insert_file(state.pool.clone(), new_file)
@@ -102,8 +87,8 @@ pub async fn download_content(file: &StoredFile) -> Result<(HeaderMap, Vec<u8>),
         HeaderValue::from_static("application/octet-stream"),
     );
     let content_disposition = format!(r#"attachment; filename="{}""#, file.name);
-    let header_value = HeaderValue::from_str(&content_disposition)
-        .map_err(crate::error::internal_error)?;
+    let header_value =
+        HeaderValue::from_str(&content_disposition).map_err(crate::error::internal_error)?;
     headers.insert(CONTENT_DISPOSITION, header_value);
 
     Ok((headers, bytes))
