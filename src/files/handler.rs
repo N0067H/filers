@@ -12,11 +12,13 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
+    auth::extractor::AuthenticatedUser,
     errors::app_error::AppError,
     files::{model, service},
 };
 
 pub async fn upload_file(
+    _: AuthenticatedUser,
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<StatusCode, AppError> {
@@ -76,6 +78,7 @@ pub async fn upload_file(
 }
 
 pub async fn get_file(
+    _: AuthenticatedUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<model::File>, AppError> {
@@ -83,6 +86,7 @@ pub async fn get_file(
 }
 
 pub async fn download_file(
+    _: AuthenticatedUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -91,6 +95,7 @@ pub async fn download_file(
 }
 
 pub async fn delete_file(
+    _: AuthenticatedUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<model::File>, AppError> {
@@ -98,6 +103,7 @@ pub async fn delete_file(
 }
 
 pub async fn create_share_link(
+    _: AuthenticatedUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<model::FileShare>, AppError> {

@@ -11,6 +11,7 @@ async fn main() {
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = db::create_pool(&database_url);
+    let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
 
     let upload_dir = std::env::var("UPLOAD_DIR").expect("UPLOAD_DIR must be set");
     let max_upload_size = std::env::var("MAX_UPLOAD_SIZE")
@@ -18,7 +19,7 @@ async fn main() {
         .parse::<usize>()
         .expect("MAX_UPLOAD_SIZE must be a valid usize");
 
-    let app_state = app::build_state(pool.clone(), upload_dir, max_upload_size);
+    let app_state = app::build_state(pool.clone(), jwt_secret, upload_dir, max_upload_size);
     let app = app::build_router(app_state);
     let server = TcpListener::bind("0.0.0.0:3000").await.unwrap();
 

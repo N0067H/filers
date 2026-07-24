@@ -1,17 +1,24 @@
 use axum::routing::{get, post};
 
-use crate::{DbPool, files};
+use crate::{DbPool, auth, files, users};
 
 #[derive(Clone)]
 pub struct AppState {
     pub pool: DbPool,
+    pub jwt_secret: String,
     pub upload_dir: std::path::PathBuf,
     pub max_upload_size: usize,
 }
 
-pub fn build_state(pool: DbPool, upload_dir: String, max_upload_size: usize) -> AppState {
+pub fn build_state(
+    pool: DbPool,
+    jwt_secret: String,
+    upload_dir: String,
+    max_upload_size: usize,
+) -> AppState {
     AppState {
         pool,
+        jwt_secret,
         upload_dir: upload_dir.into(),
         max_upload_size,
     }
@@ -19,6 +26,9 @@ pub fn build_state(pool: DbPool, upload_dir: String, max_upload_size: usize) -> 
 
 pub fn build_router(app_state: AppState) -> axum::Router {
     axum::Router::new()
+        .route("/users", post(users::handler::create_user))
+        .route("/users/{id}", get(users::handler::get_user))
+        .route("/auth/login", post(auth::handler::login))
         .route("/files", post(files::handler::upload_file))
         .route(
             "/files/{id}",

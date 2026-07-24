@@ -1,7 +1,9 @@
 pub mod app;
+pub mod auth;
 pub mod db;
 pub mod errors;
 pub mod files;
+pub mod users;
 
 use diesel::{
     PgConnection,
