@@ -2,7 +2,6 @@ use axum::http::{
     HeaderMap, HeaderValue,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
-use tokio::fs;
 use uuid::Uuid;
 
 use crate::{
@@ -19,15 +18,19 @@ use crate::{
 
 pub async fn save_upload(
     state: &AppState,
+    owner_id: i32,
     filename: String,
     display_name: String,
-    path: String,
+    storage_key: String,
+    content_type: String,
     size: i64,
 ) -> Result<(), AppError> {
     let new_file = NewFile {
+        owner_id,
         name: filename,
         display_name,
-        path,
+        storage_key,
+        content_type,
         size,
     };
 
@@ -45,13 +48,49 @@ pub async fn get_file(state: &AppState, id: i32) -> Result<StoredFile, AppError>
         })
 }
 
-pub async fn delete_file(state: &AppState, id: i32) -> Result<StoredFile, AppError> {
-    let file = get_file(state, id).await?;
-    fs::remove_file(&file.path).await.map_err(AppError::internal)?;
-    Ok(file)
+pub async fn get_owned_file(
+    state: &AppState,
+    owner_id: i32,
+    id: i32,
+) -> Result<StoredFile, AppError> {
+    repo::find_file_by_id_and_owner(state.pool.clone(), id, owner_id)
+        .await
+        .map_err(|err| match err {
+            RepoError::NotFound => AppError::Forbidden("You do not have access to this file"),
+            other => map_repo_error(other),
+        })
 }
 
-pub async fn create_share_link(state: &AppState, id: i32) -> Result<FileShare, AppError> {
+pub async fn delete_file(state: &AppState, owner_id: i32, id: i32) -> Result<StoredFile, AppError> {
+    let file = get_owned_file(state, owner_id, id).await?;
+
+    state
+        .s3_client
+        .delete_object()
+        .bucket(&state.s3_bucket)
+        .key(&file.storage_key)
+        .send()
+        .await
+        .map_err(|error| {
+            eprintln!(
+                "s3 delete_object failed: bucket={}, key={}, error={error:?}",
+                state.s3_bucket, file.storage_key
+            );
+            AppError::internal(error)
+        })?;
+
+    repo::delete_file_by_id_and_owner(state.pool.clone(), id, owner_id)
+        .await
+        .map_err(map_repo_error)
+}
+
+pub async fn create_share_link(
+    state: &AppState,
+    owner_id: i32,
+    id: i32,
+) -> Result<FileShare, AppError> {
+    get_owned_file(state, owner_id, id).await?;
+
     let new_share = NewFileShare {
         file_id: id,
         token: Uuid::new_v4(),
@@ -83,20 +122,44 @@ pub async fn get_shared_file(state: &AppState, token: Uuid) -> Result<StoredFile
     get_file(state, share_link.file_id).await
 }
 
-pub async fn download_content(file: &StoredFile) -> Result<(HeaderMap, Vec<u8>), AppError> {
-    let bytes = tokio::fs::read(&file.path)
+pub async fn download_content(
+    state: &AppState,
+    file: &StoredFile,
+) -> Result<(HeaderMap, Vec<u8>), AppError> {
+    let bytes = state
+        .s3_client
+        .get_object()
+        .bucket(&state.s3_bucket)
+        .key(&file.storage_key)
+        .send()
         .await
-        .map_err(AppError::internal)?;
+        .map_err(|error| {
+            eprintln!(
+                "s3 get_object failed: bucket={}, key={}, error={error:?}",
+                state.s3_bucket, file.storage_key
+            );
+            AppError::internal(error)
+        })?
+        .body
+        .collect()
+        .await
+        .map_err(|error| {
+            eprintln!(
+                "s3 get_object body collect failed: bucket={}, key={}, error={error:?}",
+                state.s3_bucket, file.storage_key
+            );
+            AppError::internal(error)
+        })?
+        .into_bytes();
 
     let mut headers = HeaderMap::new();
     headers.insert(
         CONTENT_TYPE,
-        HeaderValue::from_static("application/octet-stream"),
+        HeaderValue::from_str(&file.content_type).map_err(AppError::internal)?,
     );
     let content_disposition = format!(r#"attachment; filename="{}""#, file.name);
-    let header_value = HeaderValue::from_str(&content_disposition)
-        .map_err(AppError::internal)?;
+    let header_value = HeaderValue::from_str(&content_disposition).map_err(AppError::internal)?;
     headers.insert(CONTENT_DISPOSITION, header_value);
 
-    Ok((headers, bytes))
+    Ok((headers, bytes.to_vec()))
 }

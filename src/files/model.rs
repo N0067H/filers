@@ -8,20 +8,24 @@ use crate::files::schema::{file_shares, files};
 #[diesel(table_name = files)]
 pub struct File {
     pub id: i32,
+    pub owner_id: i32,
     pub name: String,
     pub display_name: String,
-    pub path: String,
+    pub storage_key: String,
     pub size: i64,
+    pub content_type: String,
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = files)]
 pub struct NewFile {
+    pub owner_id: i32,
     pub name: String,
     pub display_name: String,
-    pub path: String,
+    pub storage_key: String,
     pub size: i64,
+    pub content_type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable)]

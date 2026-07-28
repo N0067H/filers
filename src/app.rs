@@ -5,21 +5,24 @@ use crate::{DbPool, auth, files, users};
 #[derive(Clone)]
 pub struct AppState {
     pub pool: DbPool,
+    pub s3_client: aws_sdk_s3::Client,
+    pub s3_bucket: String,
     pub jwt_secret: String,
-    pub upload_dir: std::path::PathBuf,
     pub max_upload_size: usize,
 }
 
 pub fn build_state(
     pool: DbPool,
+    s3_client: aws_sdk_s3::Client,
+    s3_bucket: String,
     jwt_secret: String,
-    upload_dir: String,
     max_upload_size: usize,
 ) -> AppState {
     AppState {
         pool,
+        s3_client,
+        s3_bucket,
         jwt_secret,
-        upload_dir: upload_dir.into(),
         max_upload_size,
     }
 }

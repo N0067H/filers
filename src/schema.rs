@@ -1,3 +1,5 @@
+// @generated automatically by Diesel CLI.
+
 diesel::table! {
     file_shares (id) {
         id -> Int4,
@@ -22,6 +24,16 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(file_shares -> files (file_id));
+diesel::table! {
+    users (id) {
+        id -> Int4,
+        username -> Varchar,
+        email -> Varchar,
+        password_hash -> Varchar,
+    }
+}
 
-diesel::allow_tables_to_appear_in_same_query!(file_shares, files);
+diesel::joinable!(file_shares -> files (file_id));
+diesel::joinable!(files -> users (owner_id));
+
+diesel::allow_tables_to_appear_in_same_query!(file_shares, files, users,);
