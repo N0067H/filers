@@ -2,6 +2,7 @@ use axum::http::{
     HeaderMap, HeaderValue,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
@@ -16,6 +17,31 @@ use crate::{
     },
 };
 
+#[derive(Serialize)]
+pub struct FileResponse {
+    pub id: i32,
+    pub owner_id: i32,
+    pub name: String,
+    pub display_name: String,
+    pub size: i64,
+    pub content_type: String,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+impl From<StoredFile> for FileResponse {
+    fn from(file: StoredFile) -> Self {
+        Self {
+            id: file.id,
+            owner_id: file.owner_id,
+            name: file.name,
+            display_name: file.display_name,
+            size: file.size,
+            content_type: file.content_type,
+            created_at: file.created_at,
+        }
+    }
+}
+
 pub async fn save_upload(
     state: &AppState,
     owner_id: i32,
@@ -24,7 +50,7 @@ pub async fn save_upload(
     storage_key: String,
     content_type: String,
     size: i64,
-) -> Result<(), AppError> {
+) -> Result<FileResponse, AppError> {
     let new_file = NewFile {
         owner_id,
         name: filename,
@@ -36,6 +62,7 @@ pub async fn save_upload(
 
     repo::insert_file(state.pool.clone(), new_file)
         .await
+        .map(FileResponse::from)
         .map_err(map_repo_error)
 }
 

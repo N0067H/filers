@@ -16,7 +16,7 @@ use crate::{
     AppState,
     auth::extractor::AuthenticatedUser,
     errors::app_error::AppError,
-    files::{model, service},
+    files::{model, service::{self, FileResponse}},
 };
 
 const MULTIPART_PART_SIZE: usize = 5 * 1024 * 1024;
@@ -25,7 +25,9 @@ pub async fn upload_file(
     user: AuthenticatedUser,
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<StatusCode, AppError> {
+) -> Result<(StatusCode, Json<FileResponse>), AppError> {
+    let mut uploaded_file = None;
+
     while let Some(field) = multipart.next_field().await.map_err(AppError::internal)? {
         let filename = field
             .file_name()
@@ -45,7 +47,7 @@ pub async fn upload_file(
         let storage_key = format!("files/{}", Uuid::new_v4());
         let size = upload_field_to_s3(&state, &storage_key, &content_type, field).await?;
 
-        if let Err(error) = service::save_upload(
+        let file = match service::save_upload(
             &state,
             user.user.id,
             filename,
@@ -56,19 +58,25 @@ pub async fn upload_file(
         )
         .await
         {
-            let _ = state
-                .s3_client
-                .delete_object()
-                .bucket(&state.s3_bucket)
-                .key(&storage_key)
-                .send()
-                .await;
+            Ok(file) => file,
+            Err(error) => {
+                let _ = state
+                    .s3_client
+                    .delete_object()
+                    .bucket(&state.s3_bucket)
+                    .key(&storage_key)
+                    .send()
+                    .await;
 
-            return Err(error);
-        }
+                return Err(error);
+            }
+        };
+
+        uploaded_file = Some(file);
     }
 
-    Ok(StatusCode::CREATED)
+    let uploaded_file = uploaded_file.ok_or(AppError::BadRequest("No file provided"))?;
+    Ok((StatusCode::CREATED, Json(uploaded_file)))
 }
 
 async fn upload_field_to_s3(

@@ -11,12 +11,12 @@ use crate::{
     },
 };
 
-pub async fn insert_file(pool: DbPool, new_file: NewFile) -> Result<(), RepoError> {
+pub async fn insert_file(pool: DbPool, new_file: NewFile) -> Result<File, RepoError> {
     run_db(pool, move |conn| {
         diesel::insert_into(files::table)
             .values(&new_file)
-            .execute(conn)
-            .map(|_| ())
+            .returning(File::as_returning())
+            .get_result(conn)
     })
     .await
 }
