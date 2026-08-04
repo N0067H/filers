@@ -98,7 +98,16 @@ async fn upload_field_to_s3(
     let mut part_number = 1i32;
 
     while let Some(chunk) = field.next().await {
-        let chunk: Bytes = chunk.map_err(AppError::internal)?;
+        let chunk: Bytes = match chunk {
+            Ok(chunk) => chunk,
+            Err(error) => {
+                if let Some(upload_id) = upload_id.as_deref() {
+                    abort_multipart_upload(state, storage_key, upload_id).await;
+                }
+
+                return Err(AppError::internal(error));
+            }
+        };
 
         total_size = total_size
             .checked_add(chunk.len())
