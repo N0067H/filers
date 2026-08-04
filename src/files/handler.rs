@@ -29,57 +29,60 @@ pub async fn upload_file(
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<FileResponse>), AppError> {
-    let mut uploaded_file = None;
-
-    while let Some(field) = multipart.next_field().await.map_err(AppError::internal)? {
-        let filename = field
-            .file_name()
-            .map(str::to_owned)
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-
-        let display_name = field
-            .name()
-            .map(str::to_owned)
-            .unwrap_or_else(|| filename.clone());
-
-        let content_type = field
-            .content_type()
-            .map(str::to_owned)
-            .unwrap_or_else(|| "application/octet-stream".to_owned());
-
-        let storage_key = format!("files/{}", Uuid::new_v4());
-        let size = upload_field_to_s3(&state, &storage_key, &content_type, field).await?;
-
-        let file = match service::save_upload(
-            &state,
-            user.user.id,
-            filename,
-            display_name,
-            storage_key.clone(),
-            content_type,
-            size as i64,
-        )
+    let field = multipart
+        .next_field()
         .await
-        {
-            Ok(file) => file,
-            Err(error) => {
-                let _ = state
-                    .s3_client
-                    .delete_object()
-                    .bucket(&state.s3_bucket)
-                    .key(&storage_key)
-                    .send()
-                    .await;
+        .map_err(AppError::internal)?
+        .ok_or(AppError::BadRequest("No file provided"))?;
 
-                return Err(error);
+    let filename = field
+        .file_name()
+        .map(str::to_owned)
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+    let display_name = filename.clone();
+
+    let content_type = field
+        .content_type()
+        .map(str::to_owned)
+        .unwrap_or_else(|| "application/octet-stream".to_owned());
+
+    let storage_key = format!("files/{}", Uuid::new_v4());
+
+    let size = upload_field_to_s3(&state, &storage_key, &content_type, field).await?;
+
+    let file = match service::save_upload(
+        &state,
+        user.user.id,
+        filename,
+        display_name,
+        storage_key.clone(),
+        content_type,
+        size as i64,
+    )
+    .await
+    {
+        Ok(file) => file,
+        Err(error) => {
+            if let Err(delete_error) = state
+                .s3_client
+                .delete_object()
+                .bucket(&state.s3_bucket)
+                .key(&storage_key)
+                .send()
+                .await
+            {
+                eprintln!(
+                    "failed to delete S3 object after DB save failure: key={}, error={}",
+                    storage_key, delete_error
+                );
             }
-        };
 
-        uploaded_file = Some(file);
-    }
+            return Err(error);
+        }
+    };
 
-    let uploaded_file = uploaded_file.ok_or(AppError::BadRequest("No file provided"))?;
-    Ok((StatusCode::CREATED, Json(uploaded_file)))
+    Ok((StatusCode::CREATED, Json(file)))
 }
 
 async fn upload_field_to_s3(
