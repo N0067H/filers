@@ -2,6 +2,7 @@ use axum::http::{
     HeaderMap, HeaderValue,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
+use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -136,10 +137,13 @@ pub async fn get_shared_file(state: &AppState, token: Uuid) -> Result<StoredFile
             other => map_repo_error(other),
         })?;
 
-    if let Some(expires_at) = share_link.expires_at {
-        if expires_at < chrono::Utc::now().naive_utc() {
-            return Err(AppError::Forbidden("Link has expired"));
-        }
+    let now = Utc::now().naive_utc();
+
+    if share_link
+        .expires_at
+        .is_some_and(|expires_at| expires_at <= now)
+    {
+        return Err(AppError::Forbidden("Link has expired"));
     }
 
     if share_link.revoked_at.is_some() {
