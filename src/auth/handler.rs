@@ -13,5 +13,7 @@ pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<service::LoginResponse>, AppError> {
-    Ok(Json(service::login(&state, payload.email, payload.password).await?))
+    Ok(Json(
+        service::login(&state, payload.email, payload.password).await?,
+    ))
 }

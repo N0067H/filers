@@ -10,8 +10,6 @@ pub enum RepoError {
 pub fn map_repo_error(err: RepoError) -> AppError {
     match err {
         RepoError::NotFound => AppError::NotFound("Resource not found"),
-        RepoError::Db(msg) | RepoError::Pool(msg) | RepoError::Task(msg) => {
-            AppError::Internal(msg)
-        }
+        RepoError::Db(msg) | RepoError::Pool(msg) | RepoError::Task(msg) => AppError::Internal(msg),
     }
 }

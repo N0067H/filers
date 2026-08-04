@@ -16,7 +16,10 @@ use crate::{
     AppState,
     auth::extractor::AuthenticatedUser,
     errors::app_error::AppError,
-    files::{model, service::{self, FileResponse}},
+    files::{
+        model,
+        service::{self, FileResponse},
+    },
 };
 
 const MULTIPART_PART_SIZE: usize = 5 * 1024 * 1024;
@@ -160,13 +163,14 @@ async fn upload_field_to_s3(
                 })?;
         }
         Some(upload_id) => {
-            let completed_part = match upload_part(state, storage_key, &upload_id, part_number, buffer).await {
-                Ok(part) => part,
-                Err(error) => {
-                    abort_multipart_upload(state, storage_key, &upload_id).await;
-                    return Err(error);
-                }
-            };
+            let completed_part =
+                match upload_part(state, storage_key, &upload_id, part_number, buffer).await {
+                    Ok(part) => part,
+                    Err(error) => {
+                        abort_multipart_upload(state, storage_key, &upload_id).await;
+                        return Err(error);
+                    }
+                };
 
             completed_parts.push(completed_part);
 
@@ -251,12 +255,10 @@ async fn upload_part(
             AppError::internal(error)
         })?;
 
-    Ok(
-        CompletedPart::builder()
-            .part_number(part_number)
-            .set_e_tag(output.e_tag().map(str::to_owned))
-            .build(),
-    )
+    Ok(CompletedPart::builder()
+        .part_number(part_number)
+        .set_e_tag(output.e_tag().map(str::to_owned))
+        .build())
 }
 
 async fn abort_multipart_upload(state: &AppState, storage_key: &str, upload_id: &str) {

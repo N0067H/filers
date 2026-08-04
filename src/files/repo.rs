@@ -23,10 +23,7 @@ pub async fn insert_file(pool: DbPool, new_file: NewFile) -> Result<File, RepoEr
 
 pub async fn find_file_by_id(pool: DbPool, id: i32) -> Result<File, RepoError> {
     run_db(pool, move |conn| {
-        files::table
-            .find(id)
-            .select(File::as_select())
-            .first(conn)
+        files::table.find(id).select(File::as_select()).first(conn)
     })
     .await
 }
@@ -63,7 +60,10 @@ pub async fn delete_file_by_id_and_owner(
     .await
 }
 
-pub async fn insert_share_link(pool: DbPool, new_share: NewFileShare) -> Result<FileShare, RepoError> {
+pub async fn insert_share_link(
+    pool: DbPool,
+    new_share: NewFileShare,
+) -> Result<FileShare, RepoError> {
     run_db(pool, move |conn| {
         diesel::insert_into(file_shares::table)
             .values(&new_share)
